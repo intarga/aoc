@@ -1,0 +1,10 @@
+use std::fs;
+
+fn main() {
+    let contents = fs::read_to_string("input/dayX").expect("failed to read input file");
+
+    println!("{}", contents);
+
+    // println!("part1: {}",);
+    // println!("part2: {}",);
+}
