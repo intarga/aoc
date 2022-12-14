@@ -52,5 +52,14 @@ fn main() {
     let size_sum: u32 = dirs.values().filter(|size| **size <= 100000).sum();
 
     println!("part1: {}", size_sum);
-    // println!("part2: {}",);
+
+    let space_needed = 30000000 - (70000000 - dirs.get("/").unwrap());
+
+    let deletion_candidate_size = dirs
+        .values()
+        .filter(|size| **size >= space_needed)
+        .min()
+        .unwrap();
+
+    println!("part2: {}", deletion_candidate_size);
 }
