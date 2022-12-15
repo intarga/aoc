@@ -1,6 +1,7 @@
 // use core::ops::Range;
 use std::collections::HashSet;
 use std::fs;
+use std::iter;
 
 fn strafing_scan(
     ns_range: Vec<usize>,
@@ -31,6 +32,34 @@ fn strafing_scan(
             highest_height = curr_height;
         }
     }
+}
+
+fn compute_viewing_distance(
+    coords: Vec<(usize, usize)>,
+    height: u32,
+    tree_grid: &Vec<Vec<u32>>,
+) -> u32 {
+    let mut viewing_distance = 0;
+
+    for (i, j) in coords {
+        viewing_distance += 1;
+        if tree_grid[i][j] >= height {
+            break;
+        }
+    }
+
+    viewing_distance
+}
+
+fn compute_scenic_score(i: usize, j: usize, t_g: &Vec<Vec<u32>>) -> u32 {
+    let h = t_g[i][j];
+    let g_h = t_g.len();
+    let g_w = t_g[0].len();
+
+    compute_viewing_distance((0..i).rev().zip(iter::repeat(j)).collect(), h, t_g)
+        * compute_viewing_distance(iter::repeat(i).zip((j..g_w).skip(1)).collect(), h, t_g)
+        * compute_viewing_distance((i..g_h).skip(1).zip(iter::repeat(j)).collect(), h, t_g)
+        * compute_viewing_distance(iter::repeat(i).zip((0..j).rev()).collect(), h, t_g)
 }
 
 fn main() {
@@ -74,5 +103,18 @@ fn main() {
     );
 
     println!("part1: {}", trees_seen.len());
-    // println!("part2: {}",);
+
+    let mut scenic_map: Vec<Vec<u32>> = Vec::new();
+
+    for i in 0..grid_height {
+        let mut row: Vec<u32> = Vec::new();
+        for j in 0..grid_width {
+            row.push(compute_scenic_score(i, j, &tree_grid))
+        }
+        scenic_map.push(row);
+    }
+
+    let max_scenic_score = scenic_map.iter().flatten().max().unwrap();
+
+    println!("part2: {}", max_scenic_score);
 }
