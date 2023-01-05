@@ -6,7 +6,7 @@ struct Monkey {
     test: u64,
     true_monkey: usize,
     false_monkey: usize,
-    inspection_count: u32,
+    inspection_count: u64,
 }
 
 fn parse_monkey(lines: &[&str]) -> Monkey {
@@ -34,10 +34,14 @@ fn parse_monkey(lines: &[&str]) -> Monkey {
     }
 }
 
-fn process_round(monkeys: &mut Vec<Monkey>) {
+fn process_round(monkeys: &mut Vec<Monkey>, divide_worry: bool, divisor_prod: u64) {
     for i in 0..monkeys.len() {
         while let Some(item) = monkeys[i].items.pop_front() {
-            let new_worry = (monkeys[i].operation)(item) / 3;
+            let mut new_worry = (monkeys[i].operation)(item) % divisor_prod;
+
+            if divide_worry {
+                new_worry /= 3;
+            }
 
             let target = if new_worry % monkeys[i].test == 0 {
                 monkeys[i].true_monkey
@@ -52,29 +56,38 @@ fn process_round(monkeys: &mut Vec<Monkey>) {
     }
 }
 
-fn main() {
-    let contents = fs::read_to_string("input/day11").expect("failed to read input file");
-
-    let mut monkeys: Vec<Monkey> = contents
+fn calculate_monkey_business(input: &String, rounds: u32, divide_worry: bool) -> u64 {
+    let mut monkeys: Vec<Monkey> = input
         .lines()
         .collect::<Vec<&str>>()
         .chunks(7)
         .map(parse_monkey)
         .collect();
 
-    for _ in 0..20 {
-        process_round(&mut monkeys);
+    let divisor_prod = monkeys.iter().map(|monkey| monkey.test).product();
+
+    for _ in 0..rounds {
+        process_round(&mut monkeys, divide_worry, divisor_prod);
     }
 
     let mut inspection_counts = monkeys
         .iter()
         .map(|monkey| monkey.inspection_count)
-        .collect::<Vec<u32>>();
+        .collect::<Vec<u64>>();
     inspection_counts.sort();
     inspection_counts.reverse();
 
-    let monkey_business: u32 = inspection_counts.iter().take(2).product();
+    inspection_counts.iter().take(2).product()
+}
+
+fn main() {
+    let contents = fs::read_to_string("input/day11").expect("failed to read input file");
+
+    let monkey_business = calculate_monkey_business(&contents, 20, true);
 
     println!("part1: {}", monkey_business);
-    // println!("part2: {}",);
+
+    let monkey_business = calculate_monkey_business(&contents, 10000, false);
+
+    println!("part2: {}", monkey_business);
 }
