@@ -1,29 +1,62 @@
-use std::fs;
+use std::{collections::HashSet, convert::identity, fs, iter::repeat, path::Path, vec};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord)]
 struct Point {
     x: isize,
     y: isize,
 }
 
 impl Point {
-    fn new(x: isize, y: isize, x_max: isize, y_max: isize) -> Option<Self> {
-        if (0..x_max).contains(&x) && (0..y_max).contains(&y) {
+    fn new(x: isize, y: isize, max_dims: &Point) -> Option<Self> {
+        if (0..max_dims.x).contains(&x) && (0..max_dims.y).contains(&y) {
             Some(Self { x, y })
         } else {
             None
         }
     }
 
-    fn neighbours(&self, x_max: isize, y_max: isize) -> [Option<Point>; 4] {
+    fn neighbours(&self, max_dims: &Point) -> Vec<Point> {
         let x = self.x;
         let y = self.y;
-        [
-            Point::new(x + 1, y, x_max, y_max),
-            Point::new(x, y + 1, x_max, y_max),
-            Point::new(x - 1, y, x_max, y_max),
-            Point::new(x, y - 1, x_max, y_max),
+        vec![
+            Point::new(x + 1, y, max_dims),
+            Point::new(x, y + 1, max_dims),
+            Point::new(x - 1, y, max_dims),
+            Point::new(x, y - 1, max_dims),
         ]
+        .into_iter()
+        .filter_map(identity)
+        .collect()
+    }
+}
+
+struct Map<T: Copy> {
+    vals: Vec<Vec<T>>,
+    dims: Point,
+}
+
+impl<T: Copy> Map<T> {
+    fn new(vals: Vec<Vec<T>>) -> Self {
+        let x = vals.len() as isize;
+        let y = vals.first().map(|v| v.len()).unwrap_or(0) as isize;
+
+        Self {
+            vals,
+            dims: Point { x, y },
+        }
+    }
+
+    fn get(&self, point: &Point) -> T {
+        let x = point.x as usize;
+        let y = point.y as usize;
+        self.vals[x][y]
+    }
+
+    fn points(&self) -> impl Iterator<Item = Point> + '_ {
+        (0..self.dims.x)
+            .map(|i| repeat(i).zip((0..self.dims.y).into_iter()))
+            .flatten()
+            .map(|(x, y)| Point { x, y })
     }
 }
 
@@ -35,126 +68,83 @@ fn char_to_height(item: char) -> u8 {
     }
 }
 
-fn find_start(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -> Point {
-    for i in 0..map_height {
-        for j in 0..map_width {
-            if heightmap[i][j] == 'S' {
-                return Point::new(
-                    i as isize,
-                    j as isize,
-                    map_height as isize,
-                    map_width as isize,
-                )
-                .unwrap();
-            }
-        }
-    }
-    panic!("couldn't find start")
+fn find_start(heightmap: &Map<char>) -> Point {
+    heightmap
+        .points()
+        .find(|point| heightmap.get(&point) == 'S')
+        .expect("couldn't find start")
 }
 
-fn find_lowest(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -> Vec<Point> {
-    let mut points = Vec::new();
-
-    for i in 0..map_height {
-        for j in 0..map_width {
-            if char_to_height(heightmap[i][j]) == 1 {
-                points.push(
-                    Point::new(
-                        i as isize,
-                        j as isize,
-                        map_height as isize,
-                        map_width as isize,
-                    )
-                    .unwrap(),
-                );
-            }
-        }
-    }
-
-    points
-}
-
-fn get<T: Copy>(map: &Vec<Vec<T>>, point: &Point) -> T {
-    let x = point.x as usize;
-    let y = point.y as usize;
-    map[x][y]
-}
-
-fn set<T>(map: &mut Vec<Vec<T>>, point: &Point, val: T) {
-    let x = point.x as usize;
-    let y = point.y as usize;
-    map[x][y] = val;
+fn find_lowest(heightmap: &Map<char>) -> Vec<Point> {
+    heightmap
+        .points()
+        .filter(|point| char_to_height(heightmap.get(&point)) == 1)
+        .collect()
 }
 
 fn explore_iter(
-    heightmap: &Vec<Vec<char>>,
-    visited: &mut Vec<Vec<bool>>,
-    curr_locs: &mut Vec<Point>,
-    next_locs: &mut Vec<Point>,
-) -> bool {
+    heightmap: &Map<char>,
+    visited: &mut HashSet<Point>,
+    curr_locs: Vec<Point>,
+) -> (bool, Vec<Point>) {
+    let mut next_locs = Vec::new();
     for loc in curr_locs {
-        let curr_height = char_to_height(get(heightmap, loc));
+        let curr_height = char_to_height(heightmap.get(&loc));
 
-        for next in loc.neighbours(heightmap.len() as isize, heightmap[0].len() as isize) {
-            if let Some(next) = next {
-                let char = get(heightmap, &next);
-                if char_to_height(char) > curr_height + 1 || get(visited, &next) {
-                    continue;
-                }
-                if char == 'E' {
-                    return true;
-                }
-                set(visited, &next, true);
-                next_locs.push(next);
+        for next in loc.neighbours(&heightmap.dims) {
+            let char = heightmap.get(&next);
+            if char_to_height(char) > curr_height + 1 || visited.contains(&next) {
+                continue;
             }
+            if char == 'E' {
+                return (true, vec![]);
+            }
+            visited.insert(next.clone());
+            next_locs.push(next);
         }
     }
 
-    false
+    (false, next_locs)
 }
 
-fn explore(heightmap: &Vec<Vec<char>>, visited: &mut Vec<Vec<bool>>, start: Vec<Point>) -> usize {
-    let mut curr_locs = start.clone();
-    let mut next_locs = vec![];
+fn explore(heightmap: &Map<char>, start: Vec<Point>) -> usize {
+    let mut visited: HashSet<Point> = HashSet::from_iter(start.iter().cloned());
 
-    for loc in start {
-        set(visited, &loc, true);
-    }
+    let mut curr_locs = start;
 
     let mut found = false;
     let mut steps = 0;
 
     while !found {
-        found = explore_iter(heightmap, visited, &mut curr_locs, &mut next_locs);
-        curr_locs = next_locs.clone();
-        next_locs.clear();
+        (found, curr_locs) = explore_iter(heightmap, &mut visited, curr_locs);
         steps += 1;
     }
 
     steps
 }
 
+fn parse(path: impl AsRef<Path>) -> Map<char> {
+    Map::new(
+        fs::read_to_string(path)
+            .expect("failed to read input file")
+            .lines()
+            .map(|line| line.chars().collect())
+            .collect(),
+    )
+}
+
+fn part_1(input: &Map<char>) -> usize {
+    let start = find_start(input);
+    explore(input, vec![start])
+}
+
+fn part_2(input: &Map<char>) -> usize {
+    let lowest_points = find_lowest(input);
+    explore(input, lowest_points)
+}
+
 fn main() {
-    let contents = fs::read_to_string("../input/day12").expect("failed to read input file");
-
-    let heightmap: Vec<Vec<char>> = contents
-        .lines()
-        .map(|line| line.chars().collect())
-        .collect();
-    let map_height = heightmap.len();
-    let map_width = heightmap.first().unwrap().len();
-
-    let mut visited_1: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
-
-    let start = find_start(&heightmap, map_height, map_width);
-    let steps_1 = explore(&heightmap, &mut visited_1, vec![start]);
-
-    println!("part1: {}", steps_1);
-
-    let mut visited_2: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
-
-    let lowest_points = find_lowest(&heightmap, map_height, map_width);
-    let steps_2 = explore(&heightmap, &mut visited_2, lowest_points);
-
-    println!("part2: {}", steps_2);
+    let input = parse("../input/day12");
+    println!("part1: {}", part_1(&input));
+    println!("part2: {}", part_2(&input));
 }
