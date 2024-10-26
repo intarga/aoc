@@ -1,5 +1,32 @@
 use std::fs;
 
+#[derive(Debug, Clone)]
+struct Point {
+    x: isize,
+    y: isize,
+}
+
+impl Point {
+    fn new(x: isize, y: isize, x_max: isize, y_max: isize) -> Option<Self> {
+        if (0..x_max).contains(&x) && (0..y_max).contains(&y) {
+            Some(Self { x, y })
+        } else {
+            None
+        }
+    }
+
+    fn neighbours(&self, x_max: isize, y_max: isize) -> [Option<Point>; 4] {
+        let x = self.x;
+        let y = self.y;
+        [
+            Point::new(x + 1, y, x_max, y_max),
+            Point::new(x, y + 1, x_max, y_max),
+            Point::new(x - 1, y, x_max, y_max),
+            Point::new(x, y - 1, x_max, y_max),
+        ]
+    }
+}
+
 fn char_to_height(item: char) -> u8 {
     match item {
         'S' => 1,
@@ -8,53 +35,96 @@ fn char_to_height(item: char) -> u8 {
     }
 }
 
-// fn find_start(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -> (usize, usize) {
-//     for i in 0..map_height {
-//         for j in 0..map_width {
-//             if heightmap[i][j] == 'S' {
-//                 return (i, j);
-//             }
-//         }
-//     }
-//     panic!("couldn't find start")
-// }
+fn find_start(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -> Point {
+    for i in 0..map_height {
+        for j in 0..map_width {
+            if heightmap[i][j] == 'S' {
+                return Point::new(
+                    i as isize,
+                    j as isize,
+                    map_height as isize,
+                    map_width as isize,
+                )
+                .unwrap();
+            }
+        }
+    }
+    panic!("couldn't find start")
+}
 
-fn explore(
+fn get<T: Copy>(map: &Vec<Vec<T>>, point: &Point) -> T {
+    let x = point.x as usize;
+    let y = point.y as usize;
+    map[x][y]
+}
+
+fn set<T>(map: &mut Vec<Vec<T>>, point: &Point, val: T) {
+    let x = point.x as usize;
+    let y = point.y as usize;
+    map[x][y] = val;
+}
+
+fn explore_iter(
     heightmap: &Vec<Vec<char>>,
-    stepmap: &mut Vec<Vec<Option<u32>>>,
-    coords: (usize, usize),
-    prev_height: u32,
-    curr_steps: u32,
-) {
-    // if heightmap[coords.0][coords.1]
+    visited: &mut Vec<Vec<bool>>,
+    curr_locs: &mut Vec<Point>,
+    next_locs: &mut Vec<Point>,
+) -> bool {
+    for loc in curr_locs {
+        let curr_height = char_to_height(get(heightmap, loc));
+
+        for next in loc.neighbours(heightmap.len() as isize, heightmap[0].len() as isize) {
+            if let Some(next) = next {
+                let char = get(heightmap, &next);
+                if char_to_height(char) > curr_height + 1 || get(visited, &next) {
+                    continue;
+                }
+                if char == 'E' {
+                    return true;
+                }
+                set(visited, &next, true);
+                next_locs.push(next);
+            }
+        }
+    }
+
+    false
+}
+
+fn explore(heightmap: &Vec<Vec<char>>, visited: &mut Vec<Vec<bool>>, start: Point) -> usize {
+    let mut curr_locs = vec![start];
+    let mut next_locs = vec![];
+
+    let mut found = false;
+    let mut steps = 0;
+
+    while !found {
+        found = explore_iter(heightmap, visited, &mut curr_locs, &mut next_locs);
+        curr_locs = next_locs.clone();
+        next_locs.clear();
+        steps += 1;
+    }
+
+    steps
 }
 
 fn main() {
-    let contents = fs::read_to_string("input/day12").expect("failed to read input file");
+    let contents = fs::read_to_string("../input/day12").expect("failed to read input file");
 
-    // println!("{}", contents);
-
-    let heightmap: Vec<Vec<u8>> = contents
+    let heightmap: Vec<Vec<char>> = contents
         .lines()
-        .map(|line| line.chars().map(char_to_height).collect())
+        .map(|line| line.chars().collect())
         .collect();
     let map_height = heightmap.len();
     let map_width = heightmap.first().unwrap().len();
 
-    let stepmap: Vec<Vec<Option<u32>>> = vec![vec![None; map_width]; map_height];
+    let mut visited: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
 
-    // let start_coords = find_start(&heightmap, map_height, map_width);
-    let start_coords: (usize, usize) = (20, 0);
+    let start = find_start(&heightmap, map_height, map_width);
+    // let start = Point::new(20, 0, map_height as isize, map_width as isize).unwrap();
 
-    // println!("start: ({},{})", start_coords.0, start_coords.1)
-    println!(
-        "a: {}, z: {}, S: {}, E: {}",
-        char_to_height('a'),
-        char_to_height('z'),
-        char_to_height('S'),
-        char_to_height('E')
-    )
+    let steps = explore(&heightmap, &mut visited, start);
 
-    // println!("part1: {}",);
+    println!("part1: {}", steps);
     // println!("part2: {}",);
 }
