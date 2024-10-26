@@ -52,6 +52,28 @@ fn find_start(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -
     panic!("couldn't find start")
 }
 
+fn find_lowest(heightmap: &Vec<Vec<char>>, map_height: usize, map_width: usize) -> Vec<Point> {
+    let mut points = Vec::new();
+
+    for i in 0..map_height {
+        for j in 0..map_width {
+            if char_to_height(heightmap[i][j]) == 1 {
+                points.push(
+                    Point::new(
+                        i as isize,
+                        j as isize,
+                        map_height as isize,
+                        map_width as isize,
+                    )
+                    .unwrap(),
+                );
+            }
+        }
+    }
+
+    points
+}
+
 fn get<T: Copy>(map: &Vec<Vec<T>>, point: &Point) -> T {
     let x = point.x as usize;
     let y = point.y as usize;
@@ -91,9 +113,13 @@ fn explore_iter(
     false
 }
 
-fn explore(heightmap: &Vec<Vec<char>>, visited: &mut Vec<Vec<bool>>, start: Point) -> usize {
-    let mut curr_locs = vec![start];
+fn explore(heightmap: &Vec<Vec<char>>, visited: &mut Vec<Vec<bool>>, start: Vec<Point>) -> usize {
+    let mut curr_locs = start.clone();
     let mut next_locs = vec![];
+
+    for loc in start {
+        set(visited, &loc, true);
+    }
 
     let mut found = false;
     let mut steps = 0;
@@ -118,13 +144,17 @@ fn main() {
     let map_height = heightmap.len();
     let map_width = heightmap.first().unwrap().len();
 
-    let mut visited: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
+    let mut visited_1: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
 
     let start = find_start(&heightmap, map_height, map_width);
-    // let start = Point::new(20, 0, map_height as isize, map_width as isize).unwrap();
+    let steps_1 = explore(&heightmap, &mut visited_1, vec![start]);
 
-    let steps = explore(&heightmap, &mut visited, start);
+    println!("part1: {}", steps_1);
 
-    println!("part1: {}", steps);
-    // println!("part2: {}",);
+    let mut visited_2: Vec<Vec<bool>> = vec![vec![false; map_width]; map_height];
+
+    let lowest_points = find_lowest(&heightmap, map_height, map_width);
+    let steps_2 = explore(&heightmap, &mut visited_2, lowest_points);
+
+    println!("part2: {}", steps_2);
 }
