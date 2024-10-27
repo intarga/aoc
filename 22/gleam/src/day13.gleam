@@ -16,29 +16,6 @@ type ListPair {
   ListPair(left: List(OneOrMany), right: List(OneOrMany))
 }
 
-// fn oom_to_list(oom: OneOrMany) -> String {
-//   case oom {
-//     One(int) -> int.to_string(int)
-//     Many(list) -> list_to_string(list)
-//   }
-// }
-
-// fn list_to_string(list: List(OneOrMany)) {
-//   string.concat(["[", string.join(list.map(list, oom_to_list), ","), "]"])
-// }
-
-// fn pair_to_string(pair: ListPair) -> String {
-//   string.concat([list_to_string(pair.left), "\n", list_to_string(pair.right)])
-// }
-
-// fn ord_to_string(ord: Order) -> String {
-//   case ord {
-//     Lt -> "Lt"
-//     Eq -> "Eq"
-//     Gt -> "Gt"
-//   }
-// }
-
 fn parse_list(raw: String) -> List(OneOrMany) {
   let assert Ok(rx) = regex.from_string("\\[(?:[^\\[\\]]+|(?R))*+\\]|\\d+")
   let raw =
@@ -99,9 +76,28 @@ fn part_one(input: List(ListPair)) -> Int {
   |> int.sum
 }
 
+fn part_two(input: List(ListPair)) -> Int {
+  let divider_two = [Many([One(2)])]
+  let divider_six = [Many([One(6)])]
+  let packets =
+    input
+    |> list.map(fn(pair) { [pair.left, pair.right] })
+    |> list.prepend([divider_two, divider_six])
+    |> list.concat
+  let sorted =
+    packets
+    |> list.sort(compare_many)
+    |> list.index_map(fn(x, i) { #(x, i + 1) })
+  let assert Ok(index_two) = sorted |> list.key_find(divider_two)
+  let assert Ok(index_six) = sorted |> list.key_find(divider_six)
+  index_two * index_six
+}
+
 pub fn main() {
   let assert Ok(input) = simplifile.read("../input/day13") |> result.map(parse)
   io.print("Part one: ")
   io.debug(part_one(input))
+  io.print("Part two: ")
+  io.debug(part_two(input))
   Nil
 }
