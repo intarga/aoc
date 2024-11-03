@@ -4,7 +4,6 @@ import gleam/list
 import gleam/result
 import gleam/set.{type Set}
 import gleam/string
-import glearray.{type Array}
 import simplifile
 
 type Point {
@@ -21,8 +20,12 @@ type Segment {
 type Map =
   Set(Point)
 
+type Limit {
+  Limit(floor: Bool, depth: Int)
+}
+
 type State {
-  State(map: Map, depth: Int, start: Point, current: Point, sand_poured: Int)
+  State(map: Map, depth: Limit, start: Point, current: Point, sand_poured: Int)
 }
 
 fn parse(raw: String) -> List(Path) {
@@ -74,7 +77,9 @@ fn get_depth(input: List(Path)) -> Int {
 }
 
 fn down(point: Point) -> Point {
-  Point(..point, y: point.y + 1)
+  // compiler bug is making this line cause a mutation :(
+  // Point(..point, y: point.y + 1)
+  Point(point.x, point.y + 1)
 }
 
 fn left(point: Point) -> Point {
@@ -85,22 +90,30 @@ fn right(point: Point) -> Point {
   Point(point.x + 1, point.y + 1)
 }
 
+fn occupied(map: Map, point: Point, limit: Limit) -> Bool {
+  set.contains(map, point) || { limit.floor && point.y >= limit.depth }
+}
+
 fn pour_sand_to_overflow(state: State) -> Int {
-  case state.current.y > state.depth {
-    True -> state.sand_poured
-    False ->
-      case
-        set.contains(state.map, down(state.current)),
-        set.contains(state.map, left(state.current)),
-        set.contains(state.map, right(state.current))
-      {
-        False, _, _ ->
+  case
+    occupied(state.map, down(state.current), state.depth),
+    occupied(state.map, left(state.current), state.depth),
+    occupied(state.map, right(state.current), state.depth)
+  {
+    False, _, _ ->
+      case down(state.current).y > state.depth.depth {
+        True -> state.sand_poured
+        False ->
           pour_sand_to_overflow(State(..state, current: down(state.current)))
-        True, False, _ ->
-          pour_sand_to_overflow(State(..state, current: left(state.current)))
-        True, True, False ->
-          pour_sand_to_overflow(State(..state, current: right(state.current)))
-        _, _, _ ->
+      }
+    True, False, _ ->
+      pour_sand_to_overflow(State(..state, current: left(state.current)))
+    True, True, False ->
+      pour_sand_to_overflow(State(..state, current: right(state.current)))
+    _, _, _ ->
+      case state.current == state.start {
+        True -> state.sand_poured + 1
+        False ->
           pour_sand_to_overflow(
             State(
               ..state,
@@ -117,14 +130,21 @@ fn part_one(input: List(Path)) -> Int {
   let #(map, depth) = #(paths_to_map(input), get_depth(input))
   let start = Point(500, 0)
 
-  pour_sand_to_overflow(State(map, depth, start, start, 0))
+  pour_sand_to_overflow(State(map, Limit(False, depth), start, start, 0))
+}
+
+fn part_two(input: List(Path)) -> Int {
+  let #(map, depth) = #(paths_to_map(input), get_depth(input))
+  let start = Point(500, 0)
+
+  pour_sand_to_overflow(State(map, Limit(True, depth + 2), start, start, 0))
 }
 
 pub fn main() {
   let assert Ok(input) = simplifile.read("../input/day14") |> result.map(parse)
   io.print("Part one: ")
   io.debug(part_one(input))
-  // io.print("Part two: ")
-  // io.debug(part_two(input))
+  io.print("Part two: ")
+  io.debug(part_two(input))
   Nil
 }
